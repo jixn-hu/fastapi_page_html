@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>本地文件查看器 · 自定义路径打开</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: "PingFang SC","Helvetica Neue",sans-serif;
+      background: linear-gradient(135deg, #f5f7fa, #c3cfe2);
+      color: #333;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .viewer {
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.1);
+      width: 100%;
+      max-width: 820px;
+      overflow: hidden;
+    }
+    .header {
+      background: #346cac;
+      color: #fff;
+      padding: 16px 24px;
+      font-size: 1.3rem;
+    }
+    .custom-path {
+      display: flex;
+      padding: 16px 24px;
+      border-bottom: 1px solid #eee;
+      align-items: center;
+    }
+    .custom-path input {
+      flex: 1;
+      padding: 8px 12px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      font-size: 0.95rem;
+    }
+    .custom-path button {
+      margin-left: 12px;
+      padding: 8px 16px;
+      border: none;
+      background: #4a90e2;
+      color: #fff;
+      font-size: 0.95rem;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background .3s;
+    }
+    .custom-path button:hover {
+      background: #357ab8;
+    }
+    .drop-zone {
+      border: 2px dashed #4a90e2;
+      border-radius: 8px;
+      margin: 24px;
+      padding: 40px;
+      text-align: center;
+      transition: background 0.3s;
+      cursor: pointer;
+    }
+    .drop-zone.dragover { background: rgba(74,144,226,0.1); }
+    .drop-zone input { display: none; }
+    .drop-zone p { font-size: 1rem; color: #666; }
+    .preview {
+      padding: 16px 24px;
+      border-top: 1px solid #eee;
+      max-height: 60vh;
+      overflow: auto;
+    }
+    .preview img { max-width: 100%; border-radius: 4px; }
+    .preview pre {
+      background: #f7f7f7;
+      padding: 12px;
+      border-radius: 4px;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+    }
+    .preview embed {
+      width: 100%;
+      height: 600px;
+      border: none;
+    }
+    .file-info {
+      margin-bottom: 12px;
+      font-size: 0.9rem;
+      color: #999;
+    }
+  </style>
+</head>
+<body>
+
+<div class="viewer">
+  <div class="header">📂 本地文件查看器</div>
+
+  <!-- 自定义路径打开 -->
+  <div class="custom-path">
+    <input id="pathInput" type="text"
+      value="C:\Users\huqx2\Desktop\火车头、trs相关用户名密码 - 最新 - 快捷方式.lnk"
+      placeholder="输入本地文件绝对路径，比如：C:\Users\…\example.txt" />
+    <button id="openBtn">打开指定文件</button>
+  </div>
+
+  <!-- 拖拽/选择区域 -->
+  <label class="drop-zone" id="dropZone">
+    <input type="file" id="fileInput">
+    <p>点击或将文件拖拽到此处</p>
+    <p style="font-size:0.8rem;color:#aaa;">（支持文本／图片／PDF）</p>
+  </label>
+
+  <!-- 预览区 -->
+  <div class="preview" id="preview"></div>
+</div>
+
+<script>
+  const dropZone = document.getElementById('dropZone');
+  const fileInput = document.getElementById('fileInput');
+  const preview = document.getElementById('preview');
+  const pathInput = document.getElementById('pathInput');
+  const openBtn = document.getElementById('openBtn');
+
+  function showFile(file) {
+    const info = document.createElement('div');
+    info.className = 'file-info';
+    info.textContent = `文件：${file.name}，类型：${file.type||'未知'}，大小：${(file.size/1024).toFixed(1)} KB`;
+    preview.innerHTML = '';
+    preview.appendChild(info);
+
+    const reader = new FileReader();
+    if (file.type.startsWith('image/')) {
+      reader.onload = e => preview.appendChild(Object.assign(document.createElement('img'),{src:e.target.result}));
+      reader.readAsDataURL(file);
+
+    } else if (file.type === 'application/pdf') {
+      const embed = document.createElement('embed');
+      embed.src = URL.createObjectURL(file);
+      preview.appendChild(embed);
+
+    } else if (file.type.startsWith('text/') || /\.(md|json|js|css|html?)$/i.test(file.name)) {
+      reader.onload = e => {
+        const pre = document.createElement('pre');
+        pre.textContent = e.target.result;
+        preview.appendChild(pre);
+      };
+      reader.readAsText(file);
+
+    } else {
+      preview.innerHTML += '<p>暂不支持预览此类型文件，请下载后本地打开。</p>';
+    }
+  }
+
+  // 拖拽 & 点击
+  ['dragenter','dragover'].forEach(evt =>
+    dropZone.addEventListener(evt, e => { e.preventDefault(); dropZone.classList.add('dragover'); })
+  );
+  ['dragleave','drop'].forEach(evt =>
+    dropZone.addEventListener(evt, e => {
+      e.preventDefault();
+      dropZone.classList.remove('dragover');
+      if (evt === 'drop' && e.dataTransfer.files.length) showFile(e.dataTransfer.files[0]);
+    })
+  );
+  dropZone.addEventListener('click', () => fileInput.click());
+  fileInput.addEventListener('change', () => fileInput.files.length && showFile(fileInput.files[0]));
+
+  // 自定义路径打开
+  openBtn.addEventListener('click', () => {
+    let raw = pathInput.value.trim();
+    if (!raw) return alert('请先输入文件路径！');
+    // 构造 file:// URL
+    let url = 'file:///' + raw.replace(/\\/g, '/');
+    window.open(url);
+  });
+</script>
+
+</body>
+</html>
